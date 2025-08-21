@@ -1,14 +1,22 @@
+import os
 import telebot
 import firebase_admin
 from firebase_admin import credentials, db
+from flask import Flask, request
 
-API_TOKEN = "7968281948:AAFdMlI4XHnghkWjhLMC78maG0yGJd54QKM"
+# Токен з Environment Variables (Render -> Environment)
+API_TOKEN = os.getenv("7968281948:AAFdMlI4XHnghkWjhLMC78maG0yGJd54QKM")
+
 bot = telebot.TeleBot(API_TOKEN)
 
+# Firebase
 cred = credentials.Certificate("telegram-c480f-firebase-adminsdk-fbsvc-71cde196d0.json")
 firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://telegram-c480f-default-rtdb.firebaseio.com/'
 })
+
+# Flask для вебхука
+app = Flask(__name__)
 
 REWARD_THRESHOLDS = {
     10: "🥉 Бронзова нагорода!",
@@ -61,5 +69,20 @@ def count_hello(message):
             reply += "\n" + "\n".join(rewards)
         bot.reply_to(message, reply)
 
+# ======================
+# Flask routes
+# ======================
+@app.route(f"/{API_TOKEN}", methods=["POST"])
+def webhook():
+    update = request.get_data().decode("utf-8")
+    bot.process_new_updates([telebot.types.Update.de_json(update)])
+    return "!", 200
+
+@app.route("/", methods=["GET"])
+def index():
+    return "Bot is running!", 200
+
+
 if __name__ == "__main__":
-    bot.polling(none_stop=True)
+    # Для локального тесту
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
