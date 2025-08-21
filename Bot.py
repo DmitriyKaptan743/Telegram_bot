@@ -5,7 +5,7 @@ from firebase_admin import credentials, db
 from flask import Flask, request
 
 # Токен з Environment Variables (Render -> Environment)
-API_TOKEN = os.getenv("7968281948:AAFdMlI4XHnghkWjhLMC78maG0yGJd54QKM")
+API_TOKEN = os.getenv("API_TOKEN")
 
 bot = telebot.TeleBot(API_TOKEN)
 
