@@ -5,6 +5,7 @@ from firebase_admin import credentials, db
 from flask import Flask, request
 import logging
 import random
+import json
 
 # Налаштування логування
 logging.basicConfig(level=logging.INFO)
@@ -178,7 +179,7 @@ def webhook():
         json_str = request.get_data().decode("utf-8")
         logger.info(f"Отримано webhook: {json_str[:200]}...")
 
-        update = telebot.types.Update.de_json(json_str)
+        update = telebot.types.Update.de_json(json.loads(json_str))
         bot.process_new_updates([update])
 
         logger.info("Webhook успішно оброблено")
