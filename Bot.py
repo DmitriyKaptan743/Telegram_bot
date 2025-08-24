@@ -4,6 +4,7 @@ import firebase_admin
 from firebase_admin import credentials, db
 from flask import Flask, request
 import logging
+import random
 
 # Налаштування логування
 logging.basicConfig(level=logging.INFO)
@@ -19,7 +20,7 @@ bot = telebot.TeleBot(API_TOKEN)
 
 # Firebase ініціалізація з перевіркою помилок
 try:
-    if not firebase_admin._apps:  # Перевіряємо, чи не ініціалізовано вже
+    if not firebase_admin._apps:
         cred = credentials.Certificate("telegram-c480f-firebase-adminsdk-fbsvc-71cde196d0.json")
         firebase_admin.initialize_app(cred, {
             'databaseURL': 'https://telegram-c480f-default-rtdb.firebaseio.com/'
@@ -29,7 +30,6 @@ try:
         logger.info("Firebase вже було ініціалізовано")
 except Exception as e:
     logger.error(f"Помилка ініціалізації Firebase: {e}")
-    # Можна продовжити без Firebase для тестування
     firebase_admin = None
 
 # Flask для вебхука
@@ -48,7 +48,7 @@ def add_points(user_id, username, points_to_add):
         if not firebase_admin or not firebase_admin._apps:
             logger.warning("Firebase не доступний, використовуємо локальне збереження")
             return points_to_add
-            
+
         ref = db.reference(f'users/{user_id}')
         user_data = ref.get()
         if user_data:
@@ -57,12 +57,12 @@ def add_points(user_id, username, points_to_add):
         else:
             new_points = points_to_add
             ref.set({'username': username, 'points': new_points})
-        
+
         logger.info(f"Користувач {username} ({user_id}) отримав {points_to_add} балів. Загалом: {new_points}")
         return new_points
     except Exception as e:
         logger.error(f"Помилка при додаванні балів: {e}")
-        return points_to_add  # Повертаємо хоча б поточні бали
+        return points_to_add
 
 def get_user_points(user_id):
     """Отримує бали користувача з бази даних"""
@@ -70,7 +70,7 @@ def get_user_points(user_id):
         if not firebase_admin or not firebase_admin._apps:
             logger.warning("Firebase не доступний")
             return 0
-            
+
         ref = db.reference(f'users/{user_id}')
         user_data = ref.get()
         points = user_data.get('points', 0) if user_data else 0
@@ -93,16 +93,16 @@ def send_welcome(message):
     try:
         logger.info(f"Отримано команду /start від користувача {message.from_user.id}")
         welcome_text = ("Вітаю! 🤖\n\n"
-                       "Напиши 'Привіт' і отримуй бали.\n"
-                       "Перевір баланс командою /score.\n\n"
-                       "Удачі! 🍀")
+                        "Напиши 'Привіт' і отримуй бали.\n"
+                        "Перевір баланс командою /score.\n\n"
+                        "Удачі! 🍀")
         bot.reply_to(message, welcome_text)
         logger.info(f"Надіслано привітання користувачу {message.from_user.id}")
     except Exception as e:
         logger.error(f"Помилка в send_welcome: {e}")
         try:
             bot.reply_to(message, "Виникла помилка, але я працюю! Спробуйте ще раз.")
-        except:
+        except Exception as ex:
             logger.error("Не вдалося відправити повідомлення про помилку")
 
 @bot.message_handler(commands=['score'])
@@ -111,10 +111,10 @@ def send_score(message):
     try:
         user_id = message.from_user.id
         logger.info(f"Запит балансу від користувача {user_id}")
-        
+
         points = get_user_points(user_id)
         username = message.from_user.username or message.from_user.first_name
-        
+
         score_text = f"👤 {username}\n💰 У вас {points} балів."
         bot.reply_to(message, score_text)
         logger.info(f"Надіслано баланс користувачу {user_id}: {points} балів")
@@ -122,52 +122,50 @@ def send_score(message):
         logger.error(f"Помилка в send_score: {e}")
         try:
             bot.reply_to(message, "Помилка при отриманні балансу. Спробуйте пізніше.")
-        except:
+        except Exception as ex:
             logger.error("Не вдалося відправити повідомлення про помилку")
 
-@bot.message_handler(func=lambda message: True)
+@bot.message_handler(func=lambda message: True, content_types=['text'])
 def count_hello(message):
-    """Обробник всіх повідомлень"""
+    """Обробник всіх текстових повідомлень"""
     try:
         text = message.text if message.text else ""
         user_id = message.from_user.id
         username = message.from_user.username or message.from_user.first_name
-        
+
         logger.info(f"Отримано повідомлення від {username} ({user_id}): {text[:50]}...")
-        
+
         # Підрахунок слова "привіт" (різні варіанти)
         text_lower = text.lower()
         greetings = ["привіт", "привет", "hello", "hi", "hey"]
         count = 0
         for greeting in greetings:
             count += text_lower.count(greeting)
-        
+
         if count > 0:
             points = add_points(user_id, username, count)
             rewards = check_rewards(points)
-            
+
             reply = f"🎉 Ви отримали {count} бал(ів)!\n💰 Загалом у вас {points} балів."
-            
+
             if rewards:
                 reply += "\n\n🏅 " + "\n🏅 ".join(rewards)
-            
+
             bot.reply_to(message, reply)
             logger.info(f"Користувач {username} отримав {count} балів")
         else:
-            # Відповідь на звичайні повідомлення
             responses = [
                 "Цікаво! Напишіть 'Привіт', щоб отримати бали! 😊",
                 "Я розумію! Але бали дають тільки за 'Привіт' 🤖",
                 "Дякую за повідомлення! Спробуйте написати 'Привіт' 👋"
             ]
-            import random
             bot.reply_to(message, random.choice(responses))
-            
+
     except Exception as e:
         logger.error(f"Помилка в count_hello: {e}")
         try:
             bot.reply_to(message, "Щось пішло не так, але я все ще тут! 🤖")
-        except:
+        except Exception as ex:
             logger.error("Не вдалося відправити повідомлення про помилку")
 
 # ======================
@@ -179,10 +177,10 @@ def webhook():
     try:
         json_str = request.get_data().decode("utf-8")
         logger.info(f"Отримано webhook: {json_str[:200]}...")
-        
+
         update = telebot.types.Update.de_json(json_str)
         bot.process_new_updates([update])
-        
+
         logger.info("Webhook успішно оброблено")
         return "OK", 200
     except Exception as e:
@@ -212,12 +210,10 @@ def set_webhook():
         return f"Error: {e}", 500
 
 if __name__ == "__main__":
-    # Логування запуску
     logger.info("Запуск Telegram бота...")
     logger.info(f"API_TOKEN налаштовано: {'Так' if API_TOKEN else 'Ні'}")
-    
-    # Запуск Flask сервера
+
     port = int(os.environ.get("PORT", 5000))
     logger.info(f"Запуск сервера на порту {port}")
-    
+
     app.run(host="0.0.0.0", port=port, debug=False)
